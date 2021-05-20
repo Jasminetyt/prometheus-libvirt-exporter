@@ -5803,6 +5803,55 @@ func (l *Libvirt) DomainMigrateFinish(Dname string, Cookie []byte, Uri string, F
 	return
 }
 
+// DomainBlockInfo is thr go wrapper for REMOTE_PROC_DOMAIN_BLOCK_Info.
+func (l *Libvirt) DomainBlockInfo(Dom Domain, Path string) (capacity int64, allocation int64, physical int64,  rErrs int64, err error) {
+	var buf []byte
+
+	args := DomainBlockStatsArgs {
+		Dom: Dom,
+		Path: Path,
+	}
+
+	buf, err = encode(&args)
+	if err != nil {
+		return
+	}
+
+	var r response
+	r, err = l.requestStream(194, constants.Program, buf, nil, nil)
+	if err != nil {
+		return
+	}
+
+	// Return value unmarshaling
+	tpd := typedParamDecoder{}
+	ct := map[string]xdr.TypeDecoder{"libvirt.TypedParam": tpd}
+	rdr := bytes.NewReader(r.Payload)
+	dec := xdr.NewDecoderCustomTypes(rdr, 0, ct)
+	// capacity: int64
+	_, err = dec.Decode(&capacity)
+	if err != nil {
+		return
+	}
+	// allocation: int64
+	_, err = dec.Decode(&allocation)
+	if err != nil {
+		return
+	}
+	// physical: int64
+	_, err = dec.Decode(&physical)
+	if err != nil {
+		return
+	}
+	// Errs: int64
+	_, err = dec.Decode(&rErrs)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
 // DomainBlockStats is the go wrapper for REMOTE_PROC_DOMAIN_BLOCK_STATS.
 func (l *Libvirt) DomainBlockStats(Dom Domain, Path string) (rRdReq int64, rRdBytes int64, rWrReq int64, rWrBytes int64, rErrs int64, err error) {
 	var buf []byte

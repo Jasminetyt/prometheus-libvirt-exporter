@@ -104,6 +104,22 @@ var (
 		[]string{"domain", "instanceName", "instanceId", "userName", "userId", "projectName", "projectId", "source_file", "target_device", "host"},
 		nil)
 
+	libvirtDomainBlockCapacityDesc = prometheus.NewDesc(
+		prometheus.BuildFQName("libvirt", "domain_block_info", "capacity"),
+		"Capacity from a block device.",
+		[]string{"domain", "instanceName", "instanceId", "userName", "userId", "projectName", "projectId", "source_file", "target_device", "host"},
+		nil)
+	libvirtDomainBlockAllocationDesc = prometheus.NewDesc(
+		prometheus.BuildFQName("libvirt", "domain_block_info", "allocation"),
+		"Allocation from a block device.",
+		[]string{"domain", "instanceName", "instanceId", "userName", "userId", "projectName", "projectId", "source_file", "target_device", "host"},
+		nil)
+	libvirtDomainBlockPhysicalDesc = prometheus.NewDesc(
+		prometheus.BuildFQName("libvirt", "domain_block_info", "physical"),
+		"Physical from a block device.",
+		[]string{"domain", "instanceName", "instanceId", "userName", "userId", "projectName", "projectId", "source_file", "target_device", "host"},
+		nil)
+
 	//DomainInterface
 	libvirtDomainInterfaceRxBytesDesc = prometheus.NewDesc(
 		prometheus.BuildFQName("libvirt", "domain_interface_stats", "receive_bytes_total"),
@@ -341,6 +357,53 @@ func CollectDomain(ch chan<- prometheus.Metric, l *libvirt.Libvirt, domain *libv
 
 	}
 
+	// Report block device info.
+	for _, disk := range libvirtSchema.Devices.Disks {
+		if disk.Device == "cdrom" || disk.Device == "fd" {
+			continue
+		}
+
+		var capacity, allocation, physical int64
+		capacity, allocation, physical, _, err = l.DomainBlockInfo(*domain, disk.Target.Device)
+
+		if err != nil {
+			log.Fatalf("failed to get DomainBlockInfo: %v", err)
+			return err
+		}
+
+		ch <- prometheus.MustNewConstMetric(
+			libvirtDomainBlockCapacityDesc,
+			prometheus.CounterValue,
+			float64(capacity),
+			domainName, instanceName, string(instanceId[:]),
+			userName, userId, projectName, projectId,
+			disk.Source.File,
+			disk.Target.Device,
+			host)
+
+		ch <- prometheus.MustNewConstMetric(
+			libvirtDomainBlockAllocationDesc,
+			prometheus.CounterValue,
+			float64(allocation),
+			domainName, instanceName, string(instanceId[:]),
+			userName, userId, projectName, projectId,
+			disk.Source.File,
+			disk.Target.Device,
+			host)
+
+		ch <- prometheus.MustNewConstMetric(
+			libvirtDomainBlockPhysicalDesc,
+			prometheus.CounterValue,
+			float64(physical),
+			domainName, instanceName, string(instanceId[:]),
+			userName, userId, projectName, projectId,
+			disk.Source.File,
+			disk.Target.Device,
+			host)
+
+
+	}
+
 	// Report network interface statistics.
 	for _, iface := range libvirtSchema.Devices.Interfaces {
 		if iface.Target.Device == "" {
@@ -524,6 +587,10 @@ func (e *LibvirtExporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- libvirtDomainBlockRdReqDesc
 	ch <- libvirtDomainBlockWrBytesDesc
 	ch <- libvirtDomainBlockWrReqDesc
+
+	ch <- libvirtDomainBlockCapacityDesc
+	ch <- libvirtDomainBlockAllocationDesc
+	ch <- libvirtDomainBlockPhysicalDesc
 
 	//domain interface
 	ch <- libvirtDomainInterfaceRxBytesDesc
